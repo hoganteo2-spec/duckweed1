@@ -1,0 +1,14 @@
+# OpenCV and image processing
+opencv-python>=4.5.0
+
+# Numerical computing
+numpy>=1.20.0
+
+# Google Drive API
+google-auth-oauthlib>=0.7.0
+google-auth-httplib2>=0.1.0
+google-api-python-client>=2.50.0
+google-auth>=2.0.0
+
+# Web dashboard
+Flask>=2.0.0
