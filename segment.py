@@ -126,7 +126,7 @@ def save_segmented_image(output_dir: Path, original_path: Path, segmented_image)
 
 def append_result(results_file: Path, image_path: Path, coverage: float, timestamp: str):
     """Write the coverage result row into the CSV results file."""
-    header = ["image_filename", "timestamp", "duckweed_percent"]
+    header = ["image_filename", "timestamp", "tub_a_duckweed", "tub_a_water", "tub_b_duckweed", "tub_b_water"]
     file_exists = results_file.exists()
     with results_file.open("a", newline="", encoding="utf-8") as csvfile:
         writer = csv.writer(csvfile)
@@ -136,23 +136,145 @@ def append_result(results_file: Path, image_path: Path, coverage: float, timesta
 
 
 def process_image(image_path: Path, output_dir: Path, results_file: Path):
-    """Process one image: load, segment, calculate coverage, save output, and append results."""
+
     logging.info("Processing %s", image_path.name)
+
     image = load_image(image_path)
+
     raw_mask = create_duckweed_mask(image)
+
     mask = refine_mask(raw_mask)
-    coverage = calculate_coverage(mask)
-    timestamp = datetime.fromtimestamp(image_path.stat().st_mtime).isoformat(sep=" ")
 
-    segmented_image = build_overlay(image, mask)
-    output_path = save_segmented_image(output_dir, image_path, segmented_image)
-    append_result(results_file, image_path, coverage, timestamp)
+    # ==========================
+    # Tub Coordinates
+    # ==========================
+    left_tub_coords = (742, 611, 528)
+    right_tub_coords = (1846, 638, 516)
 
-    logging.info("  Coverage: %0.2f%%", coverage)
-    logging.info("  Saved segmented image: %s", output_path)
-    print(f"{image_path.name}: {coverage:.2f}% duckweed coverage")
+    height, width = mask.shape
 
-    return coverage, output_path
+    mask_tub1 = np.zeros(
+        (height, width),
+        dtype=np.uint8
+    )
+
+    mask_tub2 = np.zeros(
+        (height, width),
+        dtype=np.uint8
+    )
+
+    cv2.circle(
+        mask_tub1,
+        (742, 611),
+        528,
+        255,
+        -1
+    )
+
+    cv2.circle(
+        mask_tub2,
+        (1846, 638),
+        516,
+        255,
+        -1
+    )
+
+    duckweed_tub1 = cv2.bitwise_and(
+        mask,
+        mask_tub1
+    )
+
+    duckweed_tub2 = cv2.bitwise_and(
+        mask,
+        mask_tub2
+    )
+
+    total_pixels_t1 = cv2.countNonZero(
+        mask_tub1
+    )
+
+    total_pixels_t2 = cv2.countNonZero(
+        mask_tub2
+    )
+
+    duckweed_pixels_t1 = cv2.countNonZero(
+        duckweed_tub1
+    )
+
+    duckweed_pixels_t2 = cv2.countNonZero(
+        duckweed_tub2
+    )
+
+    coverage_t1 = round(
+        (
+            duckweed_pixels_t1 /
+            total_pixels_t1
+        ) * 100,
+        2
+    )
+
+    coverage_t2 = round(
+        (
+            duckweed_pixels_t2 /
+            total_pixels_t2
+        ) * 100,
+        2
+    )
+
+    timestamp = datetime.fromtimestamp(
+        image_path.stat().st_mtime
+    ).isoformat(sep=" ")
+
+    segmented_image = build_overlay(
+        image,
+        mask
+    )
+
+    output_path = save_segmented_image(
+        output_dir,
+        image_path,
+        segmented_image
+    )
+
+    # Keep existing CSV working for now
+    average_coverage = round(
+        (
+            coverage_t1 +
+            coverage_t2
+        ) / 2,
+        2
+    )
+
+    append_result(
+        results_file,
+        image_path,
+        average_coverage,
+        timestamp
+    )
+
+    logging.info(
+        "Tub A Coverage: %0.2f%%",
+        coverage_t1
+    )
+
+    logging.info(
+        "Tub B Coverage: %0.2f%%",
+        coverage_t2
+    )
+
+    print(
+        f"{image_path.name}"
+    )
+
+    print(
+        f"Tub A: {coverage_t1:.2f}%"
+    )
+
+    print(
+        f"Tub B: {coverage_t2:.2f}%"
+    )
+
+    return average_coverage, output_path
 
 
 def parse_args():
